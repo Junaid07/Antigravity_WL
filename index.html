@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Punjab Small Dams Water Level Dashboard</title>
+  
+  <!-- Tailwind CSS is not requested. Using custom style.css -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+        crossorigin="" />
+</head>
+<body>
+
+  <!-- Loading State Screen -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text">Loading Punjab Dams Water Level Data...</div>
+  </div>
+
+  <!-- Header Section -->
+  <header>
+    <div class="container header-content">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <i class="fa-solid fa-water-ladder"></i>
+          <span>AQUAFLOW</span>
+        </div>
+        <div>
+          <h1 style="font-size: 1.15rem; font-weight: 700; line-height: 1.1;">Small Dams Situation</h1>
+          <div class="brand-subtitle">Real-Time Water Resource Management of Talagang Small Dams Division</div>
+        </div>
+      </div>
+      
+      <div class="header-controls">
+        <div class="update-badge">
+          <div class="pulse-dot"></div>
+          <span>Updated: <strong id="latestUpdateDate">Loading...</strong></span>
+        </div>
+        
+        <!-- Quick Select Dam dropdown -->
+        <div class="control-input-group">
+          <label for="damQuickSelect"><i class="fa-solid fa-droplet"></i> Focus Dam</label>
+          <select id="damQuickSelect" class="control-select">
+            <option value="">-- Select a Dam --</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- KPI Summary Row -->
+    <section class="kpi-row">
+      <!-- KPI 1: Active Monitoring -->
+      <div class="kpi-card">
+        <div class="kpi-icon-box">
+          <i class="fa-solid fa-circle-nodes"></i>
+        </div>
+        <div class="kpi-info">
+          <h3>Total Monitored</h3>
+          <div id="kpiTotalDams" class="kpi-val">-</div>
+        </div>
+      </div>
+      
+      <!-- KPI 2: Overall Live Storage -->
+      <div class="kpi-card">
+        <div class="kpi-icon-box success">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="kpi-info">
+          <h3>Total Live Storage</h3>
+          <div id="kpiTotalLiveStorage" class="kpi-val">-</div>
+          <div class="kpi-sub"><span id="kpiLiveStorageCap">-</span> Aft (Acre-feet) capacity</div>
+        </div>
+      </div>
+      
+      <!-- KPI 3: Overall Average Fill -->
+      <div class="kpi-card">
+        <div class="kpi-icon-box warning">
+          <i class="fa-solid fa-chart-pie"></i>
+        </div>
+        <div class="kpi-info">
+          <h3>Average Capacity</h3>
+          <div id="kpiAvgCapacity" class="kpi-val">-</div>
+        </div>
+      </div>
+      
+      <!-- KPI 4: Alert State -->
+      <div class="kpi-card" id="alertKpiCard">
+        <div class="kpi-icon-box danger">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div class="kpi-info">
+          <h3>Spill / Watch Alerts</h3>
+          <div id="kpiSpillAlerts" class="kpi-val">-</div>
+          <div class="kpi-sub" id="kpiAlertDetail" style="font-weight: 600; color: #dc2626;">None</div>
+        </div>
+      </div>
+      
+      <!-- KPI 5: Dams Under DSL -->
+      <div class="kpi-card" id="dslKpiCard">
+        <div class="kpi-icon-box" style="background: rgba(107, 114, 128, 0.08); color: #475569; border-color: rgba(107, 114, 128, 0.15);">
+          <i class="fa-solid fa-droplet-slash"></i>
+        </div>
+        <div class="kpi-info">
+          <h3>Dams Under DSL</h3>
+          <div id="kpiDamsUnderDsl" class="kpi-val">-</div>
+          <div class="kpi-sub" id="kpiDslDetail" style="font-weight: 600; color: #475569;">None</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Global Date Picker Slider Bar -->
+    <section class="date-selector-row">
+      <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+        <i class="fa-solid fa-calendar-days"></i> Timeline Control
+      </div>
+      <div class="slider-container">
+        <span class="slider-date-label" id="startDateLabel">-</span>
+        <input type="range" id="dateRangeSlider" class="date-slider" min="0" max="100" value="100">
+        <span class="slider-date-label" id="endDateLabel">-</span>
+      </div>
+      <div class="control-input-group">
+        <label for="playTimelineBtn"><i class="fa-solid fa-play"></i> Auto-Play</label>
+        <button id="playTimelineBtn" class="btn-toggle" style="margin-left: 0.5rem;"><i class="fa-solid fa-play"></i> Run</button>
+      </div>
+    </section>
+
+    <!-- Calendar Date Picker Row -->
+    <section class="date-selector-row" style="margin-top: 0.5rem; justify-content: flex-start; gap: 1.5rem;">
+      <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+        <i class="fa-solid fa-calendar-day"></i> Calendar Search
+      </div>
+      <div class="control-input-group">
+        <input type="date" id="calendarDatePicker" style="border: none; outline: none; font-family: var(--font-sans); font-size: 0.875rem; color: var(--text-main); cursor: pointer;">
+      </div>
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Quick-jump to any date in the log using standard calendar view</span>
+    </section>
+
+    <!-- Main Grid Content -->
+    <section class="dashboard-grid">
+      
+      <!-- Left Column: Map and Trends (8 Span) -->
+      <div class="col-8" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Spatial Map Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <i class="fa-solid fa-map-location-dot"></i>
+              <span>Location of Dams & Status</span>
+            </h2>
+          </div>
+          <div class="card-body" style="padding: 0; position: relative;">
+            <div id="damsMap" class="map-container"></div>
+            <!-- Map Legend Overlay -->
+            <div class="map-legend">
+              <h4>Status</h4>
+              <div class="legend-item"><span class="legend-color status-spilling"></span>Spilling (> NPL)</div>
+              <div class="legend-item"><span class="legend-color status-watch"></span>Spill Watch (= NPL)</div>
+              <div class="legend-item"><span class="legend-color status-high"></span>High (>75%)</div>
+              <div class="legend-item"><span class="legend-color status-medium"></span>Medium (50-75%)</div>
+              <div class="legend-item"><span class="legend-color status-low"></span>Low (25-50%)</div>
+              <div class="legend-item"><span class="legend-color status-very-low"></span>Very Low (<25%)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historical Water Level Trends Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <i class="fa-solid fa-chart-line"></i>
+              <span>Water Level & Storage Trends</span>
+            </h2>
+            <div class="chart-controls">
+              <button id="btnMetricFeet" class="btn-toggle active">Water Level (ft)</button>
+              <button id="btnMetricPercent" class="btn-toggle">Capacity (%)</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="position: relative; height: 320px; width: 100%;">
+              <canvas id="trendsChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Focus Dam Insights (4 Span) -->
+      <div class="col-4">
+        <div class="card" style="height: 100%;">
+          <div class="card-header">
+            <h2 class="card-title">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>Selected Dam Details</span>
+            </h2>
+            <span id="selectedDamBadge" class="badge badge-medium">Medium</span>
+          </div>
+          <div class="card-body" style="display: flex; flex-direction: column; justify-content: space-between; gap: 1rem;">
+            
+            <!-- Details Header -->
+            <div class="dam-details-header">
+              <div id="detailsDamName" class="dam-name-large">Loading...</div>
+              <div class="dam-subtitle">
+                <i class="fa-solid fa-timeline"></i> Completed in <span id="detailsCompletionYear">-</span> | 
+                <i class="fa-solid fa-bridge"></i> <span id="detailsRiver">-</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Water Fill Level Animation -->
+            <div class="water-tank-wrapper">
+              <!-- Tank Label Guages Left -->
+              <div class="tank-gauge-labels">
+                <span class="npl" id="gaugeNPL">NPL: - ft</span>
+                <span>75%</span>
+                <span>50%</span>
+                <span>25%</span>
+                <span class="dsl" id="gaugeDSL">DSL: - ft</span>
+              </div>
+              
+              <!-- Core Cylinder Container -->
+              <div class="water-tank">
+                <div class="water-level-fill" id="waterLevelFill"></div>
+              </div>
+              
+              <!-- Percent text overlay -->
+              <div class="tank-percentage-display">
+                <span id="tankPercentageText">-</span>
+                <span class="sub-text">Filled</span>
+              </div>
+            </div>
+
+            <!-- Double-column stats layout -->
+            <div class="dam-grid-stats">
+              <div class="dam-stat-box">
+                <div class="dam-stat-label">Water Level</div>
+                <div id="statWaterLevel" class="dam-stat-value">-</div>
+                <div style="font-size: 0.65rem; color: var(--text-muted);" id="statWaterLevelDate">-</div>
+              </div>
+              <div class="dam-stat-box">
+                <div class="dam-stat-label">Live Storage</div>
+                <div id="statLiveStorage" class="dam-stat-value">-</div>
+                <div style="font-size: 0.65rem; color: var(--text-muted);">Acre-feet (Aft)</div>
+              </div>
+            </div>
+
+            <!-- Complete List of static features -->
+            <div class="meta-list">
+              <div class="meta-item">
+                <span class="meta-label">Completion Cost</span>
+                <span class="meta-val" id="metaCost">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Gross Storage Capacity</span>
+                <span class="meta-val" id="metaGrossStorage">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Catchment Area</span>
+                <span class="meta-val" id="metaCatchment">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">C.C.A. (Irrigation Area)</span>
+                <span class="meta-val" id="metaCCA">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Channel Capacity / Length</span>
+                <span class="meta-val" id="metaCanal">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">HFL (High Flood Level)</span>
+                <span class="meta-val" id="metaHFL">-</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">Coordinates</span>
+                <span class="meta-val" id="metaCoords">-</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Panel: Master Status Table (12 Span) -->
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <i class="fa-solid fa-list-check"></i>
+              <span>Dams Status Table (Latest Record)</span>
+            </h2>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Status Filters:</span>
+              <select id="statusFilterSelect" class="control-select" style="background: rgba(30, 41, 59, 0.6); padding: 0.25rem 1rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                <option value="ALL">Show All Statuses</option>
+                <option value="Spilling">Spilling</option>
+                <option value="Spill Watch">Spill Watch</option>
+                <option value="High Storage">High Storage</option>
+                <option value="Medium Storage">Medium Storage</option>
+                <option value="Low Storage">Low Storage</option>
+                <option value="Very Low Storage">Very Low Storage</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <div class="table-responsive">
+              <table class="status-table" id="damsStatusTable">
+                <thead>
+                  <tr>
+                    <th>Location</th>
+                    <th>Latest Water Level (ft)</th>
+                    <th>Dead Storage Level (DSL)</th>
+                    <th>Normal Pool Level (NPL)</th>
+                    <th>Current Capacity %</th>
+                    <th>Calculated Storage</th>
+                    <th>Status Badge</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody">
+                  <!-- Dynamic rows loaded from JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Custom CSV parser is implemented directly in app.js to eliminate external dependency issues -->
+          
+          
+  <!-- Chart.js for trends and comparisons -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+        crossorigin=""></script>
+
+  <!-- Custom app.js logic -->
+  <script src="app.js"></script>
+</body>
+</html>
